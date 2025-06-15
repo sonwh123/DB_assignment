@@ -12,11 +12,14 @@ uint16_t get2byte(void *dest);
 void btree::insert(char *key, uint64_t val){
 	// root에서 leaf까지 내려가기
 	page* path[10];
+	uint64_t versions[10];
 	int level = 0;
 	page* curr = root; // 현재 노드
 
 	while(curr->get_type() == INTERNAL){
-		path[level++] = curr; // 경로저장
+		path[level] = curr; // 경로저장
+		versions[level] = curr->read_version(); // 버전저장
+        if (!curr->try_read_lock(versions[level])) return insert(key, val); // read lock 시도
 
 		page* next = nullptr;
 
@@ -51,25 +54,45 @@ void btree::insert(char *key, uint64_t val){
 			next = (page*)(curr->get_val(k)); // 가장 오른쪽 자식 포인터
 		}
 
-		curr = next;
+		uint64_t next_ver = next->read_version();
+        if (!next->try_read_lock(next_ver)) return insert(key, val); // read lock 시도
+        if (!curr->read_unlock(versions[level])) return insert(key, val); // read lock 풀기
+
+        curr = next;
 	}
 	// leaf에서 insert 성공 시
-	if (curr->insert(key, val)) return;
+	if (!curr->try_write_lock()) return insert(key, val); // write lock 시도
+
+    if (curr->insert(key, val)) {
+        curr->write_unlock(); // write lock 풀기
+        return;
+    }
 	// leaf에서 insert 실패 시
 	// split 발생
     char* parent_key = nullptr;
     page* new_node = curr->split(key, val, &parent_key);
+	curr->write_unlock(); // write lock 풀기
 
     while (level > 0) {
         page* parent = path[--level];
-        if (parent->insert(parent_key, (uint64_t)new_node)) { return; }
+		if (!parent->try_write_lock()) return insert(key, val); // write lock 시도
+
+        if (parent->insert(parent_key, (uint64_t)new_node)) {
+            parent->write_unlock(); // write lock 풀기
+            return;
+        }
         new_node = parent->split(parent_key, (uint64_t)new_node, &parent_key);
+		parent->write_unlock(); // write lock 풀기
     }
 
 	// root까지 가득 차면 새로운 root 생성
     page* new_root = new page(INTERNAL);
+	if (!new_root->try_write_lock()) return insert(key, val); // write lock 시도
+
     new_root->set_leftmost_ptr(root);
     new_root->insert(parent_key, (uint64_t)new_node);
+	new_root->write_unlock(); // write lock 풀기
+
     root = new_root;
     height++;
 
@@ -78,5 +101,7 @@ void btree::insert(char *key, uint64_t val){
 
 uint64_t btree::lookup(char *key){
 	page* curr = root; // 현재 노드
+	uint64_t curr_version = curr->read_version(); // 버전저장
+	if (!curr->try_read_lock(curr_version)) return lookup(key); // read lock 시도
 	return curr->find(key);
 }

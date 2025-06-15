@@ -8,7 +8,7 @@ class page{
 		slot_header hdr;
 		char data[PAGE_SIZE-sizeof(slot_header)-sizeof(page*)];
 		page *leftmost_ptr;
-		std::atomic<uint64_t> version; // Version-based Lock
+		std::atomic<uint64_t> version; // 현재 버전 정보 저장
 	public:
 		page(uint16_t);
 

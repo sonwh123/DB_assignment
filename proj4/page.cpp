@@ -250,15 +250,22 @@ void page::print(){
 	}
 }
 
+// 현재 버전 반환
 uint64_t page::read_version(){
 	return version.load();
 }
+
+// 버전을 통해 페이지가 바뀌었는지 확인
 bool page::validate_read(uint64_t old_version){
-	return read_version() == old_version && (old_version % 2 == 0);
+	return read_version() == old_version;
 }
-bool page::try_read_lock(uint64_t old_version){
-	return (old_version % 2 == 0) && (read_version() == old_version);
+
+// 페이지 버전이 읽기가 가능한지 확인
+bool page::try_read_lock(uint64_t curr_version){
+	return curr_version % 2 == 0;
 }
+
+// 페이지를 사용 가능한지 확인한 후 atomic 연산으로 쓰기 락을 획득
 bool page::try_write_lock(){
 	uint64_t expected = read_version();
     if (expected % 2 != 0) return false; // 이미 lock된 상태
@@ -266,9 +273,13 @@ bool page::try_write_lock(){
     // expected가 짝수일 경우, expected+1로 atomic하게 바꾸기
     return version.compare_exchange_strong(expected, expected + 1);
 }
+
+// 버전을 통해 읽기 작업 중 페이지가 변경되었는지 확인
 bool page::read_unlock(uint64_t old_version){
 	return validate_read(old_version);
 }
+
+// 쓰기 작업 이후 버전을 갱신
 void page::write_unlock(){
 	version.fetch_add(1);
 }

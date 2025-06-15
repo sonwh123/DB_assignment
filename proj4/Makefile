@@ -11,7 +11,11 @@ btree: slot_header.o page.o btree.o main_btree.o
 	g++ -c btree.cpp
 	g++ -o ./btree slot_header.o page.o btree.o main_btree.o
 
+test_concurrency: 
+	g++ -std=c++11 -pthread test_basic_concurrency.cpp btree.cpp page.cpp slot_header.cpp -o test_bptree
+
 clean:
 	rm -f page
 	rm -f btree
+	rm -f test_bptree
 	rm -f *.o

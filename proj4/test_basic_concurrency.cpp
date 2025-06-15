@@ -6,7 +6,7 @@
 #include "btree.hpp"
 
 #define STRING_LEN 20
-#define NUM_KEYS 18
+#define NUM_KEYS 8
 #define NUM_THREADS 2
 
 btree tree;
